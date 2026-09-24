@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Співставте пару — Комп'ютерні науки</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        /* --- Анімації та базові стилі --- */
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .card-container {
+            width: 100%;
+            height: 120px;
+            cursor: pointer;
+            perspective: 1000px;
+        }
+        
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+        
+        .card-container.is-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        /* Градієнт для сорочки карти */
+        .card-front {
+            background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+            color: white;
+            font-size: 2.5rem;
+            border: 2px solid #4338ca;
+        }
+        
+        .card-back {
+            background-color: #ffffff;
+            border: 2px solid #e5e7eb;
+            transform: rotateY(180deg);
+            font-size: 0.85rem; /* Трохи зменшив для довгих назв */
+            font-weight: 700;
+            color: #1f2937;
+            line-height: 1.2;
+        }
+        
+        .card-container.is-matched .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-container.is-matched .card-back {
+            background: linear-gradient(to bottom right, #d1fae5, #ecfdf5);
+            border-color: #34d399;
+            color: #065f46;
+        }
+        .card-container.is-matched {
+            pointer-events: none;
+        }
+
+        /* --- Стилі для ВІЗУАЛЬНИХ КАРТОК --- */
+        .visual-card {
+            width: 100%;
+            height: 120px;
+            cursor: pointer;
+            border-radius: 0.75rem;
+            background-color: white;
+            border: 2px solid #e5e7eb;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            position: relative;
+        }
+
+        .visual-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .icon-bar {
+            display: flex;
+            flex-wrap: wrap; 
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem; 
+            font-size: 2rem; /* Трохи збільшив для кращої видимості */
+            line-height: 1.2;
+        }
+        
+        /* Номер картки */
+        .card-number {
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            color: white;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        .visual-card.selected {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: scale(1.02);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+
+        .visual-card.is-matched {
+            border-color: #34d399;
+            background: linear-gradient(to bottom right, #d1fae5, #ecfdf5);
+            pointer-events: none;
+            transform: none;
+        }
+
+        /* Ефект підказки */
+        .hint-active .card-back, 
+        .hint-active.visual-card {
+            background-color: #fef08a !important;
+            border-color: #eab308 !important;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.5);
+            transition: all 0.3s ease;
+        }
+        .hint-active .card-inner {
+             transform: rotateY(180deg);
+        }
+
+        /* Анімація помилки */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+        .visual-card.wrong {
+            border-color: #f87171;
+            background-color: #fef2f2;
+            animation: shake 0.4s ease-in-out;
+        }
+        .card-container.wrong .card-inner {
+            animation: shake 0.4s ease-in-out;
+        }
+        
+        /* Модальне вікно */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+    
+        /* Виправлено: shake на контейнері, щоб не скидав rotateY */
+        .card-container.wrong { animation: shake 0.4s ease-in-out; }
+        .card-container.wrong .card-inner { animation: none; }
+        .card-back { font-size: clamp(0.72rem, 1.6vw, 0.85rem); overflow-wrap: anywhere; hyphens: auto; }
+        .card-container:focus-visible, .visual-card:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+    
+        /* Режим з описом символів: підписи поруч із кожним символом */
+        .ic-label { display: none; }
+        #visual-cards.described { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #visual-cards.described .visual-card { height: auto; min-height: 120px; padding: 0.75rem 0.6rem 0.75rem 1.2rem; justify-content: flex-start; }
+        #visual-cards.described .icon-bar { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; gap: 0.4rem; font-size: 1.6rem; }
+        #visual-cards.described .icon-item { display: flex; align-items: center; gap: 0.5rem; text-align: left; }
+        #visual-cards.described .ic-label { display: inline; font-size: 0.92rem; font-weight: 600; line-height: 1.15; color: #374151; }
+
+        /* Великий екран: панель символів ширша, підписи крупніші */
+        @media (min-width: 1024px) {
+            #gameGrid.wide-symbols { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); }
+            #gameGrid.wide-symbols #subject-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            #visual-cards.described .ic-label { font-size: 1.02rem; }
+            #visual-cards.described .visual-card { min-height: 130px; }
+        }
+        @media (min-width: 1280px) {
+            #mainWrap.wide-symbols { max-width: 90rem; }
+            #gameGrid.wide-symbols #subject-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            #visual-cards.described { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            /* 16 пар: символи сіткою 4×4, панель ще трохи ширша */
+            #gameGrid.wide-symbols.pairs16 { grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
+            #gameGrid.pairs16 #visual-cards.described { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            #gameGrid.pairs16 #visual-cards.described .ic-label { font-size: 0.95rem; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-6 min-h-screen">
+
+    <div id="mainWrap" class="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl p-6 md:p-8 border border-gray-100">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-blue-500 mb-2">
+                🎓 Співставте пару
+            </h1>
+            <p class="text-gray-500 font-medium">
+                Запорізький авіаційний фаховий коледж ім. О. Г. Івченка
+            </p>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-200 shadow-sm">
+                <div class="text-2xl font-bold text-indigo-600" id="moves">0</div>
+                <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Ходів</div>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-200 shadow-sm">
+                <div class="text-2xl font-bold text-green-600" id="matched">0/8</div>
+                <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Знайдено</div>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-200 shadow-sm">
+                <div class="text-2xl font-bold text-orange-600" id="timer">0:00</div>
+                <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Час</div>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-200 shadow-sm hidden md:block">
+                <div class="text-2xl font-bold text-purple-600" id="streak">0</div>
+                <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Серія</div>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-200 shadow-sm">
+                <div class="text-2xl font-bold text-blue-600" id="bestScore">-</div>
+                <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Рекорд</div>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap justify-between items-center gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <div class="flex gap-3">
+                <button id="resetButton" class="flex items-center gap-2 bg-white text-indigo-700 border border-indigo-200 px-5 py-2.5 rounded-lg hover:bg-indigo-50 hover:shadow-md transition-all font-semibold">
+                    🔄 Нова гра
+                </button>
+                <button id="difficultyBtn" class="flex items-center gap-2 bg-white text-purple-700 border border-purple-200 px-5 py-2.5 rounded-lg hover:bg-purple-50 hover:shadow-md transition-all font-semibold">
+                    ⚙️ <span id="difficultyText">Легка</span>
+                </button>
+                <button id="legendBtn" aria-pressed="false" class="flex items-center gap-2 bg-white text-emerald-700 border border-emerald-200 px-5 py-2.5 rounded-lg hover:bg-emerald-50 hover:shadow-md transition-all font-semibold">
+                    📖 Опис символів
+                </button>
+            </div>
+            
+            <button id="hintButton" class="flex items-center gap-2 bg-yellow-400 text-yellow-900 px-6 py-2.5 rounded-lg hover:bg-yellow-300 shadow-lg hover:shadow-xl transition-all font-bold transform hover:-translate-y-0.5">
+                💡 Підказка (<span id="hintsLeft">3</span>)
+            </button>
+        </div>
+
+        <div id="gameGrid" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                <h2 class="text-lg font-bold text-center mb-4 text-gray-700 flex items-center justify-center gap-2">
+                    📚 Назви Предметів
+                </h2>
+                <div id="subject-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4"></div>
+            </div>
+            
+            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                <h2 class="text-lg font-bold text-center mb-4 text-gray-700 flex items-center justify-center gap-2">
+                    🧩 Символи
+                </h2>
+                <div id="visual-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4"></div>
+            </div>
+        </div>
+        <div id="infoBar" class="hidden fade-in mt-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-center" aria-live="polite"></div>
+    </div>
+
+    <div id="winModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[92vh] overflow-y-auto text-center shadow-2xl border-4 border-indigo-100 relative">
+            <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 text-6xl">🏆</div>
+            
+            <h2 class="text-3xl font-black text-indigo-900 mb-2 mt-4">
+                Перемога!
+            </h2>
+            <p class="text-gray-500 mb-6">Чудова робота!</p>
+
+            <div class="space-y-3 bg-gray-50 rounded-xl p-6 mb-6">
+                <div class="flex justify-between items-center border-b border-gray-200 pb-2">
+                    <span class="text-gray-600">Ходів:</span>
+                    <span class="font-bold text-indigo-600 text-xl" id="finalMoves">0</span>
+                </div>
+                <div class="flex justify-between items-center border-b border-gray-200 pb-2">
+                    <span class="text-gray-600">Час:</span>
+                    <span class="font-bold text-orange-600 text-xl" id="finalTime">0:00</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-600">Найкращий результат:</span>
+                    <span class="font-bold text-blue-600 text-xl" id="finalBestScore">0</span>
+                </div>
+            </div>
+            
+            <div id="learnedList" class="text-left text-sm max-h-44 overflow-y-auto bg-indigo-50 rounded-xl p-3 mb-4 space-y-2"></div>
+            <div id="ratingText" class="text-2xl font-bold text-yellow-500 mb-6 drop-shadow-sm"></div>
+
+            <button id="playAgainButton" class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold px-6 py-4 rounded-xl hover:from-indigo-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-0.5">
+                Грати ще раз 🚀
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Оновлений список предметів з покращеними іконками
+        const allSubjects = [
+            { id: 1, name: 'Алгоритмізація та програмування', icons: ['💻', '📜', '🐛'] }, // Код, Скрипт, Баг/Дебаг
+            { id: 2, name: 'Комп\'ютерні мережі', icons: ['🌐', '☁️', '🔗'] }, // Інтернет, Хмара, Лінк
+            { id: 3, name: 'Організація баз даних', icons: ['🗄️', '📂', '🔍'] }, // Картотека, Папка, Пошук
+            { id: 4, name: 'Вебтехнології і вебдизайн', icons: ['🎨', '📱', '🕸️'] }, // Дизайн, Мобільний, WWW
+            { id: 5, name: 'Комп\'ютерна графіка', icons: ['🖌️', '🖼️', '🌈'] }, // Пензель, Картина, Кольори
+            { id: 6, name: 'Технології захисту інформації', icons: ['🔒', '🛡️', '🕵️'] }, // Замок, Щит, Агент/Хакер
+            { id: 7, name: 'Об\'єктно-орієнтоване програмування', icons: ['🧱', '📦', '🧬'] }, // Цеглини(класи), Об'єкт, ДНК(спадкування)
+            { id: 8, name: 'Системне програмування', icons: ['⚙️', '🐧', '⌨️'] }, // Шестерня, Linux, Термінал
+            { id: 9, name: 'Вища математика', icons: ['📐', '➗', '📏'] }, // Кутник, Нескінченність, Лінійка
+            { id: 10, name: 'Теорія алгоритмів', icons: ['🧠', '🚦', '🗺️'] }, // Логіка, Потік(світлофор), Карта
+            { id: 11, name: 'Комп\'ютерна схемотехніка', icons: ['🔌', '🔋', '💡'] }, // Живлення, Батарея, Лампа
+            { id: 12, name: 'Електротехніка та електроніка', icons: ['⚡', '🧲', '📻'] }, // Напруга, Магніт, Радіоелемент
+            { id: 13, name: 'Технології створення програмних продуктів', icons: ['🚀', '🤝', '📅'] }, // Запуск, Команда, Дедлайн
+            { id: 14, name: 'Адміністрування систем', icons: ['🛠️', '🚨', '📡'] }, // Інструменти, Тривога, Сигнал
+            { id: 15, name: 'Економіка IT-бізнесу', icons: ['💼', '💸', '📈'] }, // Портфель, Гроші, Ріст
+            { id: 16, name: 'Чисельні методи', icons: ['🔢', '🎯', '📉'] } // Цифри, Точність, Графік
+        ];
+
+        // Короткий опис — показується після правильної пари (перевірте за вашою робочою програмою)
+        const subjectInfo = {
+            1: 'Вчимося писати код і розв\'язувати задачі мовою програмування.',
+            2: 'Як працює інтернет: протоколи, IP-адреси, локальні мережі.',
+            3: 'Як зберігати й швидко знаходити дані: таблиці та SQL-запити.',
+            4: 'Створення сайтів: HTML, CSS, JavaScript та дизайн інтерфейсів.',
+            5: 'Робота із зображеннями, кольором і графічними редакторами.',
+            6: 'Паролі, шифрування, антивіруси: як захистити дані й системи.',
+            7: 'Класи, об\'єкти, спадкування — як будують великі програми.',
+            8: 'Програмування «ближче до заліза»: процеси, пам\'ять, робота з ОС.',
+            9: 'Математичний фундамент: границі, похідні, інтеграли, матриці.',
+            10: 'Як вигадувати ефективні алгоритми й оцінювати їхню швидкість.',
+            11: 'З яких логічних схем і вузлів складається комп\'ютер.',
+            12: 'Струм, напруга, резистори, транзистори — основа будь-якої техніки.',
+            13: 'Як команди планують, пишуть і випускають програмні продукти.',
+            14: 'Встановлення, налаштування й підтримка серверів та мереж.',
+            15: 'Як заробляють в IT: стартапи, бюджети, керування проєктами.',
+            16: 'Наближені обчислення там, де точну формулу знайти неможливо.'
+        };
+
+        // Розшифровка символів (у тому ж порядку, що й icons у allSubjects)
+        const iconInfo = {
+            1: ['програмний код', 'скрипт', 'помилка (баг)'],
+            2: ['інтернет', 'хмара', 'зʼєднання'],
+            3: ['сховище-картотека', 'папка з даними', 'пошук'],
+            4: ['дизайн', 'мобільний екран', 'павутина (веб)'],
+            5: ['пензель', 'картина', 'кольори'],
+            6: ['замок', 'щит', 'зловмисник'],
+            7: ['цеглинки (класи)', 'обʼєкт-коробка', 'ДНК (спадкування)'],
+            8: ['механізм', 'Linux', 'термінал'],
+            9: ['геометрія', 'обчислення', 'вимірювання'],
+            10: ['логіка', 'потік дій (світлофор)', 'маршрут'],
+            11: ['живлення', 'батарея', 'лампа (сигнал)'],
+            12: ['напруга', 'магніт', 'радіоелектроніка'],
+            13: ['запуск', 'команда', 'терміни (дедлайн)'],
+            14: ['інструменти', 'тривога', 'сигнал звʼязку'],
+            15: ['бізнес-портфель', 'гроші', 'зростання'],
+            16: ['числа', 'точність', 'графік']
+        };
+        const legendBtn = document.getElementById('legendBtn');
+        let legendOn = false;
+
+        function setLegend(on) {
+            legendOn = on;
+            visualBoard.classList.toggle('described', on);
+            document.getElementById('gameGrid').classList.toggle('wide-symbols', on);
+            document.getElementById('mainWrap').classList.toggle('wide-symbols', on);
+            legendBtn.classList.toggle('bg-emerald-100', on);
+            legendBtn.setAttribute('aria-pressed', on);
+            lsSet('legendOn', on ? '1' : '0');
+        }
+
+        // Безпечні обгортки (offline / заблокований storage / відсутній confetti)
+        const lsGet = k => { try { return lsGet(k); } catch (e) { return null; } };
+        const lsSet = (k, v) => { try { lsSet(k, v); } catch (e) {} };
+        const fire = o => { try { if (typeof confetti === 'function') confetti(o); } catch (e) {} };
+        let gameId = 0, timerRunning = false;
+
+        function bindCard(el, fn) {
+            el.tabIndex = 0;
+            el.setAttribute('role', 'button');
+            el.addEventListener('click', fn);
+            el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+        }
+        function ensureTimer() { if (!timerRunning) { timerRunning = true; startTimer(); } }
+        function showInfo(id) {
+            const s = allSubjects.find(x => x.id == id);
+            const el = document.getElementById('infoBar');
+            el.innerHTML = `<span class="text-2xl mr-2">${s.icons.join('')}</span><b>${s.name}</b> — ${subjectInfo[id]}`;
+            el.classList.remove('hidden');
+        }
+
+        // Налаштування складності
+        const difficultySettings = {
+            easy: { pairs: 8, gridCols: 4 },
+            medium: { pairs: 12, gridCols: 4 },
+            hard: { pairs: 16, gridCols: 4 }
+        };
+        let difficulty = 'easy'; 
+
+        // Елементи DOM
+        const subjectBoard = document.getElementById('subject-cards');
+        const visualBoard = document.getElementById('visual-cards');
+        const resetButton = document.getElementById('resetButton');
+        const difficultyBtn = document.getElementById('difficultyBtn');
+        const hintButton = document.getElementById('hintButton');
+        const playAgainButton = document.getElementById('playAgainButton');
+        const winModal = document.getElementById('winModal');
+
+        // Стан гри
+        let moves = 0;
+        let matchedCount = 0;
+        let streak = 0;
+        let maxStreak = 0;
+        let timerInterval;
+        let seconds = 0;
+        let hints = 3;
+        let selectedSubjectCard = null;
+        let selectedVisualCard = null;
+        let lockBoard = false;
+        let currentSubjects = []; 
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // Ініціалізація гри
+        function initGame() {
+            clearInterval(timerInterval);
+            const setting = difficultySettings[difficulty];
+            currentSubjects = shuffle([...allSubjects]).slice(0, setting.pairs);
+            
+            subjectBoard.innerHTML = '';
+            visualBoard.innerHTML = '';
+            
+            resetBoard();
+            moves = 0;
+            matchedCount = 0;
+            streak = 0;
+            maxStreak = 0;
+            seconds = 0;
+            hints = 3;
+            
+            updateStats();
+            updateBestScoreDisplay();
+            document.getElementById('hintsLeft').textContent = hints;
+            hintButton.disabled = false;
+            hintButton.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            winModal.classList.add('hidden');
+            winModal.classList.remove('fade-in');
+            document.getElementById('infoBar').classList.add('hidden');
+            gameId++;
+            
+            subjectBoard.className = `grid grid-cols-2 sm:grid-cols-${setting.gridCols} gap-3 md:gap-4`;
+            visualBoard.className = `grid grid-cols-2 sm:grid-cols-${setting.gridCols} gap-3 md:gap-4`;
+            visualBoard.classList.toggle('described', legendOn);
+            document.getElementById('gameGrid').classList.toggle('pairs16', setting.pairs === 16);
+
+            const texts = { easy: 'Легка · 8 пар', medium: 'Середня · 12 пар', hard: 'Складна · 16 пар' };
+            document.getElementById('difficultyText').textContent = texts[difficulty];
+
+            const shuffledSubjects = shuffle([...currentSubjects]);
+            const shuffledVisuals = shuffle([...currentSubjects]);
+
+            // Створення карток предметів
+            shuffledSubjects.forEach(subject => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card-container';
+                cardElement.dataset.id = subject.id; 
+                cardElement.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-face card-front">🎓</div>
+                        <div class="card-face card-back">${subject.name}</div>
+                    </div>
+                `;
+                cardElement.setAttribute('aria-label', 'Картка з назвою предмета');
+                bindCard(cardElement, () => handleSubjectClick(cardElement));
+                subjectBoard.appendChild(cardElement);
+            });
+
+            // Створення візуальних карток
+            shuffledVisuals.forEach((subject, index) => {
+                const visualElement = document.createElement('div');
+                visualElement.className = 'visual-card';
+                visualElement.dataset.id = subject.id;
+                
+                // Номер картки
+                const numberBadge = document.createElement('div');
+                numberBadge.className = 'card-number';
+                numberBadge.textContent = index + 1;
+                visualElement.appendChild(numberBadge);
+
+                // Панель іконок
+                const iconBar = document.createElement('div');
+                iconBar.className = 'icon-bar';
+                iconBar.innerHTML = subject.icons.map((icon, k) => `<span class="icon-item"><span>${icon}</span><span class="ic-label">${iconInfo[subject.id][k]}</span></span>`).join('');
+                visualElement.appendChild(iconBar);
+                
+                visualElement.setAttribute('aria-label', 'Картка із символами №' + (index + 1));
+                bindCard(visualElement, () => handleVisualClick(visualElement));
+                visualBoard.appendChild(visualElement);
+            });
+            
+            timerRunning = false; // таймер стартує з першого кліку
+        }
+
+        // Логіка підказки
+        function useHint() {
+            if (hints <= 0 || lockBoard) return;
+
+            const remainingIds = currentSubjects
+                .map(s => s.id)
+                .filter(id => {
+                    const el = document.querySelector(`.card-container[data-id="${id}"]`);
+                    return el && !el.classList.contains('is-matched');
+                });
+
+            if (remainingIds.length === 0) return;
+
+            const randomId = remainingIds[Math.floor(Math.random() * remainingIds.length)];
+            
+            const subjectEl = document.querySelector(`.card-container[data-id="${randomId}"]`);
+            const visualEl = document.querySelector(`.visual-card[data-id="${randomId}"]`);
+
+            if (subjectEl && visualEl) {
+                hints--;
+                document.getElementById('hintsLeft').textContent = hints;
+                if (hints === 0) {
+                    hintButton.disabled = true;
+                    hintButton.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+
+                subjectEl.classList.add('hint-active');
+                visualEl.classList.add('hint-active');
+
+                setTimeout(() => {
+                    subjectEl.classList.remove('hint-active');
+                    visualEl.classList.remove('hint-active');
+                }, 1500);
+            }
+        }
+
+        // Клік на картку предмета
+        function handleSubjectClick(card) {
+            if (lockBoard || card.classList.contains('is-matched') || card === selectedSubjectCard) return;
+
+            if (selectedSubjectCard) {
+                selectedSubjectCard.classList.remove('is-flipped');
+            }
+            ensureTimer();
+            card.classList.add('is-flipped');
+            selectedSubjectCard = card;
+            checkForMatch();
+        }
+
+        // Клік на візуальну картку
+        function handleVisualClick(card) {
+            if (lockBoard || card.classList.contains('is-matched') || card === selectedVisualCard) return;
+            
+            if (selectedVisualCard) {
+                selectedVisualCard.classList.remove('selected');
+            }
+            ensureTimer();
+            card.classList.add('selected');
+            selectedVisualCard = card;
+            checkForMatch();
+        }
+
+        // Перевірка на збіг
+        function checkForMatch() {
+            if (!selectedSubjectCard || !selectedVisualCard) return;
+            lockBoard = true;
+            moves++;
+            const sc = selectedSubjectCard, vc = selectedVisualCard; // локальні копії: нова гра під час анімації більше не ламає код
+            if (sc.dataset.id === vc.dataset.id) {
+                sc.classList.add('is-matched');
+                vc.classList.add('is-matched');
+                vc.classList.remove('selected');
+                sc.removeAttribute('tabindex'); vc.removeAttribute('tabindex');
+                matchedCount++; streak++; maxStreak = Math.max(maxStreak, streak);
+                showInfo(sc.dataset.id);
+                resetBoard();
+                if (matchedCount === difficultySettings[difficulty].pairs) {
+                    clearInterval(timerInterval);
+                    setTimeout(showWinModal, 900);
+                }
+            } else {
+                streak = 0;
+                sc.classList.add('wrong'); vc.classList.add('wrong');
+                const gen = gameId;
+                setTimeout(() => {
+                    sc.classList.remove('is-flipped', 'wrong');
+                    vc.classList.remove('selected', 'wrong');
+                    if (gen === gameId) resetBoard();
+                }, 700);
+            }
+            updateStats();
+        }
+
+        function resetBoard() {
+            selectedSubjectCard = null;
+            selectedVisualCard = null;
+            lockBoard = false;
+        }
+
+        // --- Статистика та інше ---
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                seconds++;
+                updateTimer();
+            }, 1000);
+        }
+
+        function updateTimer() {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.getElementById('timer').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function toggleDifficulty() {
+            const difficulties = ['easy', 'medium', 'hard'];
+            const currentIndex = difficulties.indexOf(difficulty);
+            difficulty = difficulties[(currentIndex + 1) % 3];
+            initGame();
+        }
+
+        function updateStats() {
+            const setting = difficultySettings[difficulty];
+            document.getElementById('moves').textContent = moves;
+            document.getElementById('matched').textContent = `${matchedCount}/${setting.pairs}`;
+            document.getElementById('streak').textContent = streak;
+            updateTimer();
+        }
+
+        function updateBestScoreDisplay() {
+            const bestScore = lsGet(`bestScore_${difficulty}`) || '-';
+            document.getElementById('bestScore').textContent = bestScore;
+        }
+
+        function showWinModal() {
+            fire({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#4f46e5', '#3b82f6', '#fbbf24', '#ef4444']
+            });
+
+            setTimeout(() => {
+                fire({
+                    particleCount: 100,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                    colors: ['#4f46e5', '#3b82f6']
+                });
+                fire({
+                    particleCount: 100,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                    colors: ['#fbbf24', '#ef4444']
+                });
+            }, 400);
+
+            document.getElementById('finalMoves').textContent = moves;
+            document.getElementById('finalTime').textContent = document.getElementById('timer').textContent;
+            
+            const bestScoreKey = `bestScore_${difficulty}`;
+            const currentBestScore = parseInt(lsGet(bestScoreKey) || '0');
+            let newBestScore = currentBestScore;
+            
+            if (moves < currentBestScore || currentBestScore === 0) {
+                newBestScore = moves;
+                lsSet(bestScoreKey, newBestScore);
+            }
+            document.getElementById('finalBestScore').textContent = newBestScore;
+            updateBestScoreDisplay();
+            
+            const totalPairs = difficultySettings[difficulty].pairs;
+            const rating = moves <= totalPairs * 1.5 ? '⭐⭐⭐ Легендарно!' : 
+                          moves <= totalPairs * 2 ? '⭐⭐ Чудово!' : '⭐ Непогано!';
+            document.getElementById('ratingText').textContent = rating;
+            
+            document.getElementById('learnedList').innerHTML = '<div class="font-bold text-indigo-900">Ви познайомились із предметами:</div>' +
+                currentSubjects.map(x => `<div><span class="mr-1">${x.icons[0]}</span><b>${x.name}</b><br><span class="text-gray-600">${subjectInfo[x.id]}</span></div>`).join('');
+            winModal.classList.remove('hidden');
+            winModal.classList.add('fade-in');
+        }
+
+        function closeModal() {
+            winModal.classList.add('hidden');
+            initGame();
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !winModal.classList.contains('hidden')) closeModal(); });
+        resetButton.addEventListener('click', initGame);
+        difficultyBtn.addEventListener('click', toggleDifficulty);
+        hintButton.addEventListener('click', useHint);
+        playAgainButton.addEventListener('click', closeModal);
+
+        legendBtn.addEventListener('click', () => setLegend(!legendOn));
+        initGame();
+        setLegend(lsGet('legendOn') === '1');
+    </script>
+</body>
+</html>
